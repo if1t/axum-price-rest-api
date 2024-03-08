@@ -24,10 +24,10 @@ async fn main() {
 }
 
 async fn get_price(
-    State(db): State<Db>,
+    State(_global_price): State<GlobalPrice>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let db = db.read().unwrap();
-    if let Some(price) = *db {
+    let global_price = _global_price.read().unwrap();
+    if let Some(price) = *global_price {
         Ok(price.to_string())
     } else {
         Err(StatusCode::NOT_FOUND)
@@ -35,28 +35,28 @@ async fn get_price(
 }
 
 #[derive(Debug, Deserialize)]
-struct UpdateDb {
+struct PriceDto {
     price: u64,
 }
 
 async fn set_price(
-    State(db): State<Arc<RwLock<Option<u64>>>>,
-    Json(input): Json<UpdateDb>,
+    State(_global_price): State<Arc<RwLock<Option<u64>>>>,
+    Json(input): Json<PriceDto>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let price = input.price;
-    let mut db = db.write().unwrap();
-    *db = Some(price);
+    let mut global_price = _global_price.write().unwrap();
+    *global_price = Some(price);
 
     Ok(StatusCode::OK)
 }
 
 async fn set_null_price(
-    State(db): State<Arc<RwLock<Option<u64>>>>,
+    State(_global_price): State<Arc<RwLock<Option<u64>>>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let mut db = db.write().unwrap();
-    *db = None;
+    let mut global_price = _global_price.write().unwrap();
+    *global_price = None;
 
     Ok(StatusCode::OK)
 }
 
-type Db = Arc<RwLock<Option<u64>>>;
+type GlobalPrice = Arc<RwLock<Option<u64>>>;
