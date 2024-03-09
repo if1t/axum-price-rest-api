@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use axum::{
     extract::State,
@@ -8,6 +8,7 @@ use axum::{
     Router, routing::get,
 };
 use serde::Deserialize;
+use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +27,7 @@ async fn main() {
 async fn get_price(
     State(global_price): State<GlobalPrice>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let global_price = global_price.read().unwrap();
+    let global_price = global_price.read().await;
     if let Some(price) = *global_price {
         Ok(price.to_string())
     } else {
@@ -40,20 +41,20 @@ struct PriceDto {
 }
 
 async fn set_price(
-    State(global_price): State<Arc<RwLock<Option<u64>>>>,
+    State(global_price): State<GlobalPrice>,
     Json(input): Json<PriceDto>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let price = input.price;
-    let mut global_price = global_price.write().unwrap();
+    let mut global_price = global_price.write().await;
     *global_price = Some(price);
 
     Ok(StatusCode::OK)
 }
 
 async fn set_null_price(
-    State(global_price): State<Arc<RwLock<Option<u64>>>>,
+    State(global_price): State<GlobalPrice>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let mut global_price = global_price.write().unwrap();
+    let mut global_price = global_price.write().await;
     *global_price = None;
 
     Ok(StatusCode::OK)
