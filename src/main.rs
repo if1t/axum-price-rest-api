@@ -24,9 +24,9 @@ async fn main() {
 }
 
 async fn get_price(
-    State(_global_price): State<GlobalPrice>,
+    State(global_price): State<GlobalPrice>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let global_price = _global_price.read().unwrap();
+    let global_price = global_price.read().unwrap();
     if let Some(price) = *global_price {
         Ok(price.to_string())
     } else {
@@ -40,20 +40,20 @@ struct PriceDto {
 }
 
 async fn set_price(
-    State(_global_price): State<Arc<RwLock<Option<u64>>>>,
+    State(global_price): State<Arc<RwLock<Option<u64>>>>,
     Json(input): Json<PriceDto>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let price = input.price;
-    let mut global_price = _global_price.write().unwrap();
+    let mut global_price = global_price.write().unwrap();
     *global_price = Some(price);
 
     Ok(StatusCode::OK)
 }
 
 async fn set_null_price(
-    State(_global_price): State<Arc<RwLock<Option<u64>>>>,
+    State(global_price): State<Arc<RwLock<Option<u64>>>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let mut global_price = _global_price.write().unwrap();
+    let mut global_price = global_price.write().unwrap();
     *global_price = None;
 
     Ok(StatusCode::OK)
