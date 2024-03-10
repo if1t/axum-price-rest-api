@@ -94,8 +94,12 @@ name = "axum-price-rest-api"
 version = "0.2.0"
 dependencies = [
  "axum",
+ "http-body-util",
+ "mime",
  "serde",
+ "serde_json",
  "tokio",
+ "tower",
 ]
 
 [[package]]
