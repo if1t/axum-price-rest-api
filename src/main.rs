@@ -1,19 +1,24 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     Json,
     response::IntoResponse,
-    Router, routing::get,
+    Router,
+    routing::*,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
-    let global_price = Arc::new(RwLock::new(None));
-    let app = app(global_price);
+    let prices = Arc::new(RwLock::new(HashMap::default()));
+    let app = app(prices);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -22,49 +27,76 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-fn app(state: GlobalPrice) -> Router {
+fn app(state: TPriceMap) -> Router {
     Router::new()
-        .route("/price", get(get_price).patch(set_price).delete(set_null_price))
+        .route("/prices", get(get_prices).post(create_price))
+        .route("/prices/:id", get(get_price_by_id).patch(update_price_by_id).delete(delete_price))
         .with_state(state)
 }
 
-async fn get_price(
-    State(global_price): State<GlobalPrice>,
+async fn get_prices(
+    State(prices): State<TPriceMap>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let global_price = global_price.read().await;
-    if let Some(price) = *global_price {
-        Ok(price.to_string())
-    } else {
-        Err(StatusCode::NOT_FOUND)
+    let prices = prices.read().await;
+    Ok(StatusCode::NOT_FOUND)
+}
+
+async fn create_price(
+    State(prices): State<TPriceMap>,
+    Json(input): Json<PriceDto>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let uuid = Uuid::new_v4();
+    prices.write().await.insert(uuid, input.price);
+
+    Ok(uuid.to_string())
+}
+
+async fn get_price_by_id(
+    Path(id): Path<Uuid>,
+    State(prices): State<TPriceMap>,
+) -> Result<impl IntoResponse, StatusCode> {
+    match prices.read().await.get(&id) {
+        Some(price) => Ok(price.to_string()),
+        None => Err(StatusCode::NOT_FOUND)
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct PriceDto {
-    price: u64,
+    price: TPrice,
 }
 
-async fn set_price(
-    State(global_price): State<GlobalPrice>,
+async fn update_price_by_id(
+    Path(id): Path<Uuid>,
+    State(prices): State<TPriceMap>,
     Json(input): Json<PriceDto>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let price = input.price;
-    let mut global_price = global_price.write().await;
-    *global_price = Some(price);
-
-    Ok(StatusCode::OK)
+    match prices.write().await.get_mut(&id) {
+        Some(old_price) => {
+            *old_price = input.price;
+            Ok(StatusCode::OK)
+        },
+        None => Err(StatusCode::NOT_FOUND)
+    }
 }
 
-async fn set_null_price(
-    State(global_price): State<GlobalPrice>,
+async fn delete_price(
+    Path(id): Path<Uuid>,
+    State(prices): State<TPriceMap>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let mut global_price = global_price.write().await;
-    *global_price = None;
-
-    Ok(StatusCode::OK)
+    match prices.read().await.get(&id) {
+        Some(_) => {
+            prices.write().await.remove(&id);
+            Ok(StatusCode::OK)
+        },
+        None => {
+            Err(StatusCode::NOT_FOUND)
+        }
+    }
 }
 
-type GlobalPrice = Arc<RwLock<Option<u64>>>;
+type TPrice = u64;
+type TPriceMap = Arc<RwLock<HashMap<Uuid, TPrice>>>;
 
 #[cfg(test)]
 mod tests {
@@ -88,7 +120,7 @@ mod tests {
 
         let request = build_request(
             http::Method::GET,
-            "/price",
+            "/prices",
             None
         );
         let response = call(request, &mut app).await;
@@ -103,7 +135,7 @@ mod tests {
 
         let request = build_request(
             http::Method::GET,
-            "/price",
+            "/prices",
             None
         );
         let response = call(request, &mut app).await;
@@ -118,7 +150,7 @@ mod tests {
 
         let request = build_request(
             http::Method::PATCH,
-            "/price",
+            "/prices",
             Some(&json!({"price": 666}))
         );
         let response = call(request, &mut app).await;
@@ -126,7 +158,7 @@ mod tests {
 
         let request = build_request(
             http::Method::GET,
-            "/price",
+            "/prices",
             None
         );
         let response = call(request, &mut app).await;
@@ -141,7 +173,7 @@ mod tests {
 
         let request = build_request(
             http::Method::DELETE,
-            "/price",
+            "/prices",
             None
         );
         let response = call(request, &mut app).await;
@@ -149,7 +181,7 @@ mod tests {
 
         let request = build_request(
             http::Method::GET,
-            "/price",
+            "/prices",
             None
         );
         let response = call(request, &mut app).await;
