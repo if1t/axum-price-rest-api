@@ -37,6 +37,7 @@ fn app(state: TPriceMap) -> Router {
 async fn get_prices(
     State(prices): State<TPriceMap>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    todo!("сделать get метод для возврата всех цен");
     let prices = prices.read().await;
     Ok(StatusCode::NOT_FOUND)
 }
@@ -109,66 +110,74 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn get_price_test() {
-        let state = Arc::new(RwLock::new(Some(25)));
+    async fn get_price_by_id_test() {
+        let uuid = Uuid::new_v4();
+        let map_with_entry = build_test_hashmap_with_entry(uuid, 666);
+        let state = Arc::new(RwLock::new(map_with_entry));
         let mut app = app(state).into_service();
 
         let request = build_request(
             http::Method::GET,
-            "/prices",
+            &format!("/prices/{}", uuid),
             None
         );
+
         let response = call(request, &mut app).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(collect_body(response).await, "25");
-    }
 
-    #[tokio::test]
-    async fn get_not_found_price_test() {
-        let state = Arc::new(RwLock::new(None));
-        let mut app = app(state).into_service();
-
-        let request = build_request(
-            http::Method::GET,
-            "/prices",
-            None
-        );
-        let response = call(request, &mut app).await;
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert_eq!(collect_body(response).await, "");
-    }
-
-    #[tokio::test]
-    async fn patch_price_test() {
-        let state = Arc::new(RwLock::new(None));
-        let mut app = app(state).into_service();
-
-        let request = build_request(
-            http::Method::PATCH,
-            "/prices",
-            Some(&json!({"price": 666}))
-        );
-        let response = call(request, &mut app).await;
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let request = build_request(
-            http::Method::GET,
-            "/prices",
-            None
-        );
-        let response = call(request, &mut app).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(collect_body(response).await, "666");
     }
 
     #[tokio::test]
+    async fn get_not_found_price_by_id_test() {
+        let state = Arc::new(RwLock::new(HashMap::new()));
+        let mut app = app(state).into_service();
+
+        let request = build_request(
+            http::Method::GET,
+            &format!("/prices/{}", Uuid::new_v4()),
+            None
+        );
+        let response = call(request, &mut app).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(collect_body(response).await, "");
+    }
+
+    #[tokio::test]
+    async fn patch_price_by_id_test() {
+        let uuid = Uuid::new_v4();
+        let map_with_entry = build_test_hashmap_with_entry(uuid, 666);
+        let state = Arc::new(RwLock::new(map_with_entry));
+        let mut app = app(state).into_service();
+
+        let request = build_request(
+            http::Method::PATCH,
+            &format!("/prices/{}", uuid),
+            Some(&json!({"price": 555}))
+        );
+        let response = call(request, &mut app).await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let request = build_request(
+            http::Method::GET,
+            &format!("/prices/{}", uuid),
+            None
+        );
+        let response = call(request, &mut app).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(collect_body(response).await, "555");
+    }
+
+    #[tokio::test]
     async fn delete_price_test() {
-        let state = Arc::new(RwLock::new(Some(5)));
+        let uuid = Uuid::new_v4();
+        let map_with_entry = build_test_hashmap_with_entry(uuid, 666);
+        let state = Arc::new(RwLock::new(map_with_entry));
         let mut app = app(state).into_service();
 
         let request = build_request(
             http::Method::DELETE,
-            "/prices",
+            &format!("/prices/{}", uuid),
             None
         );
         let response = call(request, &mut app).await;
@@ -176,12 +185,19 @@ mod tests {
 
         let request = build_request(
             http::Method::GET,
-            "/prices",
+            &format!("/prices/{}", uuid),
             None
         );
         let response = call(request, &mut app).await;
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(collect_body(response).await, "");
+    }
+
+    fn build_test_hashmap_with_entry(uuid: Uuid, value: TPrice) -> HashMap<Uuid, TPrice> {
+        let mut hashmap_with_test_price_entry: HashMap<Uuid, TPrice> = HashMap::new();
+        hashmap_with_test_price_entry.insert(uuid, value);
+
+        hashmap_with_test_price_entry
     }
 
     fn build_request(method: http::Method, uri: &str, maybe_json: Option<&Value>) -> Request<Body> {
