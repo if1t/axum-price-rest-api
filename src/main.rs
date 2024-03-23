@@ -84,14 +84,9 @@ async fn delete_price(
     Path(id): Path<Uuid>,
     State(prices): State<TPriceMap>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    match prices.read().await.get(&id) {
-        Some(_) => {
-            prices.write().await.remove(&id);
-            Ok(StatusCode::OK)
-        },
-        None => {
-            Err(StatusCode::NOT_FOUND)
-        }
+    match prices.write().await.remove_entry(&id) {
+        Some(_) => Ok(StatusCode::OK),
+        None => Err(StatusCode::NOT_FOUND)
     }
 }
 
